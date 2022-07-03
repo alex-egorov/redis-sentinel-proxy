@@ -19,6 +19,9 @@ var (
 	localAddr    = flag.String("listen", ":9999", "local address")
 	sentinelAddr = flag.String("sentinel", ":26379", "remote address")
 	masterName   = flag.String("master", "", "name of the master redis node")
+	stime      = flag.String("timeout", "1s", "timeout")
+
+	timeout time.Duration
 )
 
 func main() {
@@ -32,6 +35,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to resolve sentinel address: %s", err)
 	}
+
+	timeout, err = time.ParseDuration(*stime)
+    if err != nil {
+        log.Fatal("Wring timeout format, %s", err)
+    }
 
 	go master()
 
@@ -68,7 +76,7 @@ func pipe(r io.Reader, w io.WriteCloser) {
 }
 
 func proxy(local io.ReadWriteCloser, remoteAddr *net.TCPAddr) {
-	remote, err := net.DialTCP("tcp", nil, remoteAddr)
+	remote, err := net.DialTimeout("tcp", remoteAddr.String(), timeout )
 	if err != nil {
 		log.Println(err)
 		local.Close()
@@ -79,7 +87,7 @@ func proxy(local io.ReadWriteCloser, remoteAddr *net.TCPAddr) {
 }
 
 func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAddr, error) {
-	conn, err := net.DialTCP("tcp", nil, sentinelAddress)
+	conn, err := net.DialTimeout("tcp", sentinelAddress.String(), timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +118,7 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 	}
 
 	//check that there's actually someone listening on that address
-	conn2, err := net.DialTCP("tcp", nil, addr)
+	conn2, err := net.DialTimeout("tcp", addr.String(), timeout)
 	if err == nil {
 		defer conn2.Close()
 	}
